@@ -1,50 +1,72 @@
-import nltk
-from nltk.sentiment.vader import SentimentIntensityAnalyzer
-from config import BULLISH_THRESHOLD, BEARISH_THRESHOLD
+import time
+import datetime
+import torch
+from transformers import pipeline
+from config import FINBERT_MODEL, SENTIMENT_RECENT_WEIGHT
 
-# VADER lexicon is downloaded in the GitHub Actions workflow step.
-# For local runs: python -c "import nltk; nltk.download('vader_lexicon')"
-_sia = None
-
-
-def _get_sia() -> SentimentIntensityAnalyzer:
-    global _sia
-    if _sia is None:
-        _sia = SentimentIntensityAnalyzer()
-    return _sia
+_finbert = None
 
 
-def score_headlines(headlines: list[str]) -> float:
-    """
-    Returns the average VADER compound score for a list of headlines.
-    Score range: -1.0 (most negative) to +1.0 (most positive).
-    Returns 0.0 if no headlines provided.
-    """
-    if not headlines:
-        return 0.0
-    sia = _get_sia()
-    scores = [sia.polarity_scores(h)["compound"] for h in headlines if h]
-    return round(sum(scores) / len(scores), 4) if scores else 0.0
+def _get_pipeline():
+    global _finbert
+    if _finbert is None:
+        _finbert = pipeline(
+            "sentiment-analysis",
+            model=FINBERT_MODEL,
+            tokenizer=FINBERT_MODEL,
+            device=-1,
+            truncation=True,
+            max_length=512,
+        )
+    return _finbert
 
 
-def score_articles(articles: list[dict]) -> list[dict]:
-    """
-    Scores a list of article dicts (must have 'headline' key).
-    Adds a 'score' key to each article and returns sorted by score descending.
-    """
-    sia = _get_sia()
+def _label_to_score(label: str, confidence: float) -> float:
+    if label == "positive":
+        return confidence
+    if label == "negative":
+        return -confidence
+    return 0.0
+
+
+def score_articles(articles: list[dict], cutoff_hours: int = 24) -> list[dict]:
+    if not articles:
+        return []
+
+    pipe = _get_pipeline()
+    headlines = [a.get("headline", "")[:512] for a in articles]
+
+    with torch.no_grad():
+        results = pipe(headlines, batch_size=8)
+
+    now = datetime.datetime.utcnow().timestamp()
     scored = []
-    for a in articles:
-        headline = a.get("headline", "")
-        compound = sia.polarity_scores(headline)["compound"] if headline else 0.0
-        scored.append({**a, "score": round(compound, 4)})
+    for article, result in zip(articles, results):
+        raw_score = _label_to_score(result["label"], result["score"])
+        age_hours = (now - article.get("datetime", now)) / 3600
+        weight = SENTIMENT_RECENT_WEIGHT if age_hours <= cutoff_hours else 1.0
+        scored.append({
+            **article,
+            "finbert_label": result["label"],
+            "finbert_confidence": round(result["score"], 4),
+            "score": round(raw_score, 4),
+            "weight": weight,
+        })
+
     return sorted(scored, key=lambda x: x["score"], reverse=True)
 
 
+def aggregate_score(scored_articles: list[dict]) -> float:
+    if not scored_articles:
+        return 0.0
+    total_weight = sum(a["weight"] for a in scored_articles)
+    weighted_sum = sum(a["score"] * a["weight"] for a in scored_articles)
+    return round(weighted_sum / total_weight, 4)
+
+
 def classify(score: float) -> str:
-    """Maps a compound score to a human-readable signal label."""
-    if score >= BULLISH_THRESHOLD:
+    if score >= 0.15:
         return "Bullish"
-    if score <= BEARISH_THRESHOLD:
+    if score <= -0.15:
         return "Bearish"
     return "Neutral"

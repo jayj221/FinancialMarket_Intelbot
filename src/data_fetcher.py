@@ -1,79 +1,85 @@
 import time
 import datetime
 import finnhub
-from config import FINNHUB_API_KEY, NEWS_LIMIT
+import yfinance as yf
+from config import FINNHUB_API_KEY, NEWS_LOOKBACK_DAYS, NEWS_LIMIT_PER_ASSET
+
+_client = finnhub.Client(api_key=FINNHUB_API_KEY)
 
 
-client = finnhub.Client(api_key=FINNHUB_API_KEY)
-
-
-def _rate_limit():
-    """Brief pause to stay within Finnhub's 60 req/min free tier."""
+def _rl():
     time.sleep(1.1)
 
 
 def get_quote(symbol: str) -> dict | None:
-    """
-    Returns price data for a stock or crypto symbol.
-    For crypto, symbol should be like 'BINANCE:BTCUSDT'.
-    Returns dict with keys: price, change_pct, high, low, open, prev_close
-    or None on error.
-    """
     try:
-        q = client.quote(symbol)
-        _rate_limit()
-        if q.get("c", 0) == 0:
+        q = _client.quote(symbol)
+        _rl()
+        if not q or q.get("c", 0) == 0:
             return None
         return {
             "symbol": symbol,
             "price": q["c"],
-            "change_pct": round(((q["c"] - q["pc"]) / q["pc"]) * 100, 2) if q["pc"] else 0,
+            "change_pct": round(((q["c"] - q["pc"]) / q["pc"]) * 100, 2) if q["pc"] else 0.0,
             "high": q["h"],
             "low": q["l"],
             "open": q["o"],
             "prev_close": q["pc"],
         }
     except Exception as e:
-        print(f"[data_fetcher] Error fetching quote for {symbol}: {e}")
+        print(f"[data_fetcher] quote error {symbol}: {e}")
+        return None
+
+
+def get_ohlcv(symbol: str, days: int = 200) -> "pd.DataFrame | None":
+    try:
+        ticker = yf.Ticker(symbol)
+        df = ticker.history(period=f"{days}d")
+        if df.empty or len(df) < 50:
+            return None
+        df.index = df.index.tz_localize(None)
+        return df[["Open", "High", "Low", "Close", "Volume"]].rename(
+            columns=str.lower
+        )
+    except Exception as e:
+        print(f"[data_fetcher] ohlcv error {symbol}: {e}")
         return None
 
 
 def get_stock_news(symbol: str) -> list[dict]:
-    """
-    Returns recent news articles for a stock symbol.
-    Each item has: headline, source, url, sentiment_score (if available).
-    """
     today = datetime.date.today()
-    week_ago = today - datetime.timedelta(days=7)
+    from_date = today - datetime.timedelta(days=NEWS_LOOKBACK_DAYS)
     try:
-        news = client.company_news(symbol, _from=str(week_ago), to=str(today))
-        _rate_limit()
-        return [
-            {
-                "headline": a.get("headline", ""),
-                "source": a.get("source", ""),
-                "url": a.get("url", ""),
-            }
-            for a in (news or [])[:NEWS_LIMIT]
-        ]
+        news = _client.company_news(symbol, _from=str(from_date), to=str(today))
+        _rl()
+        return (news or [])[:NEWS_LIMIT_PER_ASSET]
     except Exception as e:
-        print(f"[data_fetcher] Error fetching news for {symbol}: {e}")
+        print(f"[data_fetcher] news error {symbol}: {e}")
         return []
 
 
-def get_market_news() -> list[dict]:
-    """Returns general market news headlines."""
+def get_analyst_data(symbol: str) -> dict:
+    out = {"recommendations": [], "price_targets": {}, "insider_sentiment": {}}
     try:
-        news = client.general_news("general", min_id=0)
-        _rate_limit()
-        return [
-            {
-                "headline": a.get("headline", ""),
-                "source": a.get("source", ""),
-                "url": a.get("url", ""),
-            }
-            for a in (news or [])[:NEWS_LIMIT]
-        ]
-    except Exception as e:
-        print(f"[data_fetcher] Error fetching market news: {e}")
-        return []
+        out["recommendations"] = _client.recommendation_trends(symbol) or []
+        _rl()
+    except Exception:
+        pass
+    try:
+        out["price_targets"] = _client.price_target(symbol) or {}
+        _rl()
+    except Exception:
+        pass
+    try:
+        out["insider_sentiment"] = _client.stock_insider_sentiment(symbol, "2024-01-01", str(datetime.date.today())) or {}
+        _rl()
+    except Exception:
+        pass
+    return out
+
+
+def get_ticker_info(symbol: str) -> dict:
+    try:
+        return yf.Ticker(symbol).info or {}
+    except Exception:
+        return {}
