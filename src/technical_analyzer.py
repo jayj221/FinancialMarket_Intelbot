@@ -1,51 +1,63 @@
 import pandas as pd
-import pandas_ta as ta
 import numpy as np
 
 
+def _ema(series: pd.Series, period: int) -> pd.Series:
+    return series.ewm(span=period, adjust=False).mean()
+
+
 def calc_rsi(df: pd.DataFrame, period: int = 14) -> float | None:
-    rsi = ta.rsi(df["close"], length=period)
-    return round(float(rsi.iloc[-1]), 2) if rsi is not None and not rsi.empty else None
+    delta = df["close"].diff()
+    gain = delta.clip(lower=0).rolling(period).mean()
+    loss = (-delta.clip(upper=0)).rolling(period).mean()
+    rs = gain / loss.replace(0, np.nan)
+    r = 100 - (100 / (1 + rs))
+    val = r.iloc[-1]
+    return round(float(val), 2) if pd.notna(val) else None
 
 
-def calc_macd(df: pd.DataFrame) -> dict | None:
-    macd = ta.macd(df["close"])
-    if macd is None or macd.empty:
+def calc_macd(df: pd.DataFrame, fast: int = 12, slow: int = 26, signal: int = 9) -> dict | None:
+    ema_fast = _ema(df["close"], fast)
+    ema_slow = _ema(df["close"], slow)
+    macd_line = ema_fast - ema_slow
+    signal_line = _ema(macd_line, signal)
+    hist = macd_line - signal_line
+    m, s, h = macd_line.iloc[-1], signal_line.iloc[-1], hist.iloc[-1]
+    if any(pd.isna(v) for v in [m, s, h]):
         return None
-    hist_col = [c for c in macd.columns if "MACDh" in c][0]
-    macd_col = [c for c in macd.columns if "MACD_" in c and "h" not in c and "s" not in c][0]
-    sig_col = [c for c in macd.columns if "MACDs" in c][0]
     return {
-        "macd": round(float(macd[macd_col].iloc[-1]), 4),
-        "signal": round(float(macd[sig_col].iloc[-1]), 4),
-        "histogram": round(float(macd[hist_col].iloc[-1]), 4),
-        "momentum": "Bullish" if float(macd[hist_col].iloc[-1]) > 0 else "Bearish",
+        "macd": round(float(m), 4),
+        "signal": round(float(s), 4),
+        "histogram": round(float(h), 4),
+        "momentum": "Bullish" if float(h) > 0 else "Bearish",
     }
 
 
 def calc_bollinger(df: pd.DataFrame, period: int = 20) -> dict | None:
-    bb = ta.bbands(df["close"], length=period)
-    if bb is None or bb.empty:
+    close = df["close"]
+    mid = close.rolling(period).mean()
+    std = close.rolling(period).std()
+    upper = mid + 2 * std
+    lower = mid - 2 * std
+    u, l, price = float(upper.iloc[-1]), float(lower.iloc[-1]), float(close.iloc[-1])
+    if any(pd.isna(v) for v in [u, l]):
         return None
-    upper = float(bb[[c for c in bb.columns if "BBU" in c][0]].iloc[-1])
-    lower = float(bb[[c for c in bb.columns if "BBL" in c][0]].iloc[-1])
-    price = float(df["close"].iloc[-1])
-    band_width = upper - lower
-    position = (price - lower) / band_width if band_width > 0 else 0.5
+    band_width = u - l
+    position = (price - l) / band_width if band_width > 0 else 0.5
     return {
-        "upper": round(upper, 2),
-        "lower": round(lower, 2),
+        "upper": round(u, 2),
+        "lower": round(l, 2),
         "position_pct": round(position * 100, 1),
     }
 
 
 def calc_ema_cross(df: pd.DataFrame, short: int = 9, long: int = 21) -> dict | None:
-    ema_short = ta.ema(df["close"], length=short)
-    ema_long = ta.ema(df["close"], length=long)
-    if ema_short is None or ema_long is None:
-        return None
+    ema_short = _ema(df["close"], short)
+    ema_long = _ema(df["close"], long)
     s, l = float(ema_short.iloc[-1]), float(ema_long.iloc[-1])
     prev_s, prev_l = float(ema_short.iloc[-2]), float(ema_long.iloc[-2])
+    if any(pd.isna(v) for v in [s, l, prev_s, prev_l]):
+        return None
     crossed_up = prev_s <= prev_l and s > l
     crossed_down = prev_s >= prev_l and s < l
     status = "Golden Cross" if crossed_up else "Death Cross" if crossed_down else ("Bullish" if s > l else "Bearish")
@@ -60,7 +72,6 @@ def calc_volume_ratio(df: pd.DataFrame, period: int = 20) -> float | None:
 
 def minervini_trend_template(df: pd.DataFrame) -> dict:
     close = df["close"]
-    volume = df["volume"]
 
     sma50 = close.rolling(50).mean()
     sma150 = close.rolling(150).mean()
@@ -103,15 +114,15 @@ def get_technicals(df: pd.DataFrame) -> dict:
 def technical_score(technicals: dict) -> float:
     score = 50.0
 
-    rsi = technicals.get("rsi")
-    if rsi is not None:
-        if 40 <= rsi <= 60:
+    rsi_val = technicals.get("rsi")
+    if rsi_val is not None:
+        if 40 <= rsi_val <= 60:
             score += 10
-        elif rsi < 30:
+        elif rsi_val < 30:
             score += 15
-        elif rsi > 70:
+        elif rsi_val > 70:
             score -= 15
-        elif rsi > 65:
+        elif rsi_val > 65:
             score -= 5
 
     macd = technicals.get("macd")
