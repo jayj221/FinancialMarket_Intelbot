@@ -7,5 +7,5 @@ transformers==4.40.0
 torch==2.2.2
 fredapi==0.5.2
 sec-edgar-api==1.1.0
-scikit-learn==1.4.1
+scikit-learn==1.4.0
 scipy==1.13.0
