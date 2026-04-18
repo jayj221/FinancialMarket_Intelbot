@@ -37,7 +37,8 @@ def get_ohlcv(symbol: str, days: int = 200) -> "pd.DataFrame | None":
         df = ticker.history(period=f"{days}d")
         if df.empty or len(df) < 50:
             return None
-        df.index = df.index.tz_localize(None)
+        if hasattr(df.index, "tz") and df.index.tz is not None:
+            df.index = df.index.tz_convert(None)
         return df[["Open", "High", "Low", "Close", "Volume"]].rename(
             columns=str.lower
         )

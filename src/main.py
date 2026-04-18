@@ -14,7 +14,10 @@ from config import WATCHLIST, FINNHUB_API_KEY, FRED_API_KEY
 
 def classify_market_direction() -> dict:
     spy = yf.Ticker("SPY").history(period="6mo")
-    spy.index = spy.index.tz_localize(None)
+    if spy.empty:
+        return {"classification": "UNKNOWN", "dist_count": 0, "above_sma50": False, "above_sma200": False}
+    if hasattr(spy.index, "tz") and spy.index.tz is not None:
+        spy.index = spy.index.tz_convert(None)
     close = spy["Close"]
     volume = spy["Volume"]
 
