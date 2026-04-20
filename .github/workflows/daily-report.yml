@@ -1,0 +1,42 @@
+name: Daily Market Report
+
+on:
+  schedule:
+    - cron: '15 21 * * 1-5'   # 5:15 PM ET — after US market close
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  report:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Cache pip
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: pip-lite-${{ hashFiles('scripts/requirements_lite.txt') }}
+
+      - name: Install dependencies
+        run: pip install yfinance==0.2.40 pandas==2.2.2 numpy==1.26.4 requests==2.31.0
+
+      - name: Generate report
+        run: python scripts/daily_report.py
+
+      - name: Commit report
+        run: |
+          git config user.name "jayj221"
+          git config user.email "jayj221@users.noreply.github.com"
+          git add reports/
+          git diff --staged --quiet && echo "No changes." || (
+            git commit -m "📊 Daily report $(date -u '+%Y-%m-%d') — market intelligence update" &&
+            git push
+          )
