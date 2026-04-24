@@ -1,0 +1,41 @@
+{
+  "updated": "2026-04-24",
+  "upcoming": [
+    {
+      "symbol": "MSFT",
+      "date": "2026-04-29",
+      "est_eps": 3.22,
+      "sector": "Technology"
+    },
+    {
+      "symbol": "META",
+      "date": "2026-04-30",
+      "est_eps": 5.26,
+      "sector": "Communication"
+    },
+    {
+      "symbol": "AAPL",
+      "date": "2026-05-01",
+      "est_eps": 1.61,
+      "sector": "Technology"
+    },
+    {
+      "symbol": "AMZN",
+      "date": "2026-05-01",
+      "est_eps": 1.36,
+      "sector": "Consumer"
+    },
+    {
+      "symbol": "GOOGL",
+      "date": "2026-04-29",
+      "est_eps": 2.01,
+      "sector": "Communication"
+    },
+    {
+      "symbol": "NVDA",
+      "date": "2026-05-28",
+      "est_eps": 0.88,
+      "sector": "Technology"
+    }
+  ]
+}
