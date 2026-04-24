@@ -1,0 +1,71 @@
+{
+  "date": "2026-04-24",
+  "sectors": {
+    "XLK": {
+      "name": "Technology",
+      "price": 159.77,
+      "chg_1d": 2.52,
+      "chg_1m": 17.35
+    },
+    "XLF": {
+      "name": "Financials",
+      "price": 51.51,
+      "chg_1d": -0.57,
+      "chg_1m": 4.52
+    },
+    "XLV": {
+      "name": "Healthcare",
+      "price": 144.15,
+      "chg_1d": -1.43,
+      "chg_1m": -0.44
+    },
+    "XLE": {
+      "name": "Energy",
+      "price": 56.53,
+      "chg_1d": -0.8,
+      "chg_1m": -7.09
+    },
+    "XLI": {
+      "name": "Industrials",
+      "price": 172.49,
+      "chg_1d": -0.91,
+      "chg_1m": 5.18
+    },
+    "XLC": {
+      "name": "Comm Services",
+      "price": 115.85,
+      "chg_1d": -1.32,
+      "chg_1m": 4.24
+    },
+    "XLY": {
+      "name": "Consumer Disc",
+      "price": 118.62,
+      "chg_1d": 0.75,
+      "chg_1m": 8.16
+    },
+    "XLP": {
+      "name": "Consumer Staples",
+      "price": 83.24,
+      "chg_1d": -0.29,
+      "chg_1m": 2.63
+    },
+    "XLRE": {
+      "name": "Real Estate",
+      "price": 43.97,
+      "chg_1d": 0.01,
+      "chg_1m": 9.12
+    },
+    "XLB": {
+      "name": "Materials",
+      "price": 51.92,
+      "chg_1d": 0.22,
+      "chg_1m": 7.17
+    },
+    "XLU": {
+      "name": "Utilities",
+      "price": 46.22,
+      "chg_1d": 0.27,
+      "chg_1m": 2.5
+    }
+  }
+}
