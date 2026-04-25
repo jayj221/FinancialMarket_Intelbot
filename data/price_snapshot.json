@@ -1,0 +1,33 @@
+{
+  "date": "2026-04-26",
+  "prices": {
+    "AAPL": {
+      "price": 271.06,
+      "updated": "2026-04-26"
+    },
+    "NVDA": {
+      "price": 208.27,
+      "updated": "2026-04-26"
+    },
+    "MSFT": {
+      "price": 424.62,
+      "updated": "2026-04-26"
+    },
+    "META": {
+      "price": 675.03,
+      "updated": "2026-04-26"
+    },
+    "AMZN": {
+      "price": 263.99,
+      "updated": "2026-04-26"
+    },
+    "GOOGL": {
+      "price": 344.4,
+      "updated": "2026-04-26"
+    },
+    "TSLA": {
+      "price": 376.3,
+      "updated": "2026-04-26"
+    }
+  }
+}
