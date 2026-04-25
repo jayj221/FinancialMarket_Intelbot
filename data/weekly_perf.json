@@ -1,0 +1,37 @@
+{
+  "date": "2026-04-26",
+  "performance": {
+    "AAPL": {
+      "price": 271.06,
+      "chg_week": -0.73
+    },
+    "NVDA": {
+      "price": 208.27,
+      "chg_week": 3.07
+    },
+    "MSFT": {
+      "price": 424.62,
+      "chg_week": 1.57
+    },
+    "META": {
+      "price": 675.03,
+      "chg_week": 0.61
+    },
+    "AMZN": {
+      "price": 263.99,
+      "chg_week": 6.33
+    },
+    "GOOGL": {
+      "price": 344.4,
+      "chg_week": 2.07
+    },
+    "TSLA": {
+      "price": 376.3,
+      "chg_week": -4.13
+    },
+    "SPY": {
+      "price": 713.94,
+      "chg_week": 0.74
+    }
+  }
+}
