@@ -1,8 +1,8 @@
-name: Daily Market Report
+name: Daily Market Intelligence — Multi-Commit
 
 on:
   schedule:
-    - cron: '15 21 * * 1-5'   # 5:15 PM ET — after US market close
+    - cron: '15 21 * * 1-5'
   workflow_dispatch:
 
 permissions:
@@ -11,32 +11,103 @@ permissions:
 jobs:
   report:
     runs-on: ubuntu-latest
-
     steps:
       - uses: actions/checkout@v4
-
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-
       - name: Cache pip
         uses: actions/cache@v4
         with:
           path: ~/.cache/pip
-          key: pip-lite-${{ hashFiles('scripts/requirements_lite.txt') }}
+          key: pip-lite-v2-${{ hashFiles('requirements.txt') }}
+      - run: pip install yfinance==0.2.40 pandas==2.2.2 numpy==1.26.4 requests==2.31.0
 
-      - name: Install dependencies
-        run: pip install yfinance==0.2.40 pandas==2.2.2 numpy==1.26.4 requests==2.31.0
+      - name: Generate all data
+        run: |
+          python scripts/daily_report.py
+          python - <<'EOF'
+          import yfinance as yf, json, datetime, os, requests
+          TODAY = str(datetime.date.today())
+          def tz(h):
+              if hasattr(h.index,'tz') and h.index.tz: h.index = h.index.tz_convert(None)
+              return h
+          os.makedirs('data', exist_ok=True)
+          # Sector performance
+          sectors = {'XLK':'Technology','XLF':'Financials','XLV':'Healthcare','XLE':'Energy','XLI':'Industrials','XLC':'Comm Services','XLY':'Consumer Disc','XLP':'Staples','XLRE':'Real Estate','XLB':'Materials','XLU':'Utilities'}
+          sd = {}
+          for sym,name in sectors.items():
+              try:
+                  h=tz(yf.Ticker(sym).history(period='1mo'))
+                  if h.empty: continue
+                  c,p,m=float(h['Close'].iloc[-1]),float(h['Close'].iloc[-2]),float(h['Close'].iloc[0])
+                  sd[sym]={'name':name,'price':round(c,2),'chg_1d':round((c-p)/p*100,2),'chg_1m':round((c-m)/m*100,2)}
+              except: pass
+          with open('data/sector_performance.json','w') as f: json.dump({'date':TODAY,'sectors':sd},f,indent=2)
+          lines=[f'# Sector Performance — {TODAY}','','| Sector | 1D | 1M |','|--------|----|----|']
+          for s,d in sorted(sd.items(),key=lambda x:x[1]['chg_1d'],reverse=True):
+              lines.append(f"| {d['name']} ({s}) | {d['chg_1d']:+.2f}% | {d['chg_1m']:+.2f}% |")
+          with open(f'reports/sector_{TODAY}.md','w') as f: f.write('\n'.join(lines))
+          # Weekly perf
+          wd={}
+          for sym in ['AAPL','NVDA','MSFT','META','AMZN','GOOGL','TSLA','SPY']:
+              try:
+                  h=tz(yf.Ticker(sym).history(period='5d'))
+                  if h.empty: continue
+                  c,m=float(h['Close'].iloc[-1]),float(h['Close'].iloc[0])
+                  wd[sym]={'price':round(c,2),'chg_week':round((c-m)/m*100,2)}
+              except: pass
+          with open('data/weekly_perf.json','w') as f: json.dump({'date':TODAY,'performance':wd},f,indent=2)
+          lines=[f'# Weekly Performance — {TODAY}','','| Symbol | Price | Week |','|--------|-------|------|']
+          for sym,d in sorted(wd.items(),key=lambda x:x[1]['chg_week'],reverse=True):
+              lines.append(f"| {sym} | ${d['price']} | {d['chg_week']:+.2f}% |")
+          with open(f'reports/weekly_{TODAY}.md','w') as f: f.write('\n'.join(lines))
+          # VIX history
+          try:
+              h=tz(yf.Ticker('^VIX').history(period='1mo'))
+              vh=[{'date':str(d.date()),'close':round(float(v),2)} for d,v in zip(h.index[-10:],h['Close'].iloc[-10:])]
+              with open('data/vix_history.json','w') as f: json.dump({'updated':TODAY,'history':vh},f,indent=2)
+          except: pass
+          # Price snapshot
+          ps={}
+          for sym in ['AAPL','NVDA','MSFT','META','AMZN','GOOGL','TSLA']:
+              try:
+                  info=yf.Ticker(sym).fast_info
+                  ps[sym]={'price':round(float(info.last_price),2),'updated':TODAY}
+              except: pass
+          with open('data/price_snapshot.json','w') as f: json.dump({'date':TODAY,'prices':ps},f,indent=2)
+          print('All data generated')
+          EOF
 
-      - name: Generate report
-        run: python scripts/daily_report.py
-
-      - name: Commit report
+      - name: Configure git
         run: |
           git config user.name "jayj221"
           git config user.email "jayj221@users.noreply.github.com"
-          git add reports/
-          git diff --staged --quiet && echo "No changes." || (
-            git commit -m "📊 Daily report $(date -u '+%Y-%m-%d') — market intelligence update" &&
-            git push
-          )
+
+      - name: Commit daily report
+        run: |
+          git add reports/${{ env.TODAY }}.md 2>/dev/null || git add reports/$(date +%Y-%m-%d).md
+          git diff --staged --quiet || git commit -m "📊 Daily report $(date -u '+%Y-%m-%d') — market intelligence"
+
+      - name: Commit sector data
+        run: |
+          git add data/sector_performance.json reports/sector_$(date +%Y-%m-%d).md
+          git diff --staged --quiet || git commit -m "📉 Sector scan $(date -u '+%Y-%m-%d') — 11 sectors ranked"
+
+      - name: Commit weekly performance
+        run: |
+          git add data/weekly_perf.json reports/weekly_$(date +%Y-%m-%d).md
+          git diff --staged --quiet || git commit -m "📅 Weekly performance $(date -u '+%Y-%m-%d') — 5-day returns"
+
+      - name: Commit VIX history
+        run: |
+          git add data/vix_history.json
+          git diff --staged --quiet || git commit -m "😨 VIX trend $(date -u '+%Y-%m-%d') — fear gauge updated"
+
+      - name: Commit price snapshot
+        run: |
+          git add data/price_snapshot.json
+          git diff --staged --quiet || git commit -m "💹 Price snapshot $(date -u '+%Y-%m-%d') — close prices logged"
+
+      - name: Push all commits
+        run: git push
